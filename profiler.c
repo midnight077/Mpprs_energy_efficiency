@@ -22,7 +22,6 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <stdint.h>
-#include <errno.h>
 #include <assert.h>
 #include <fcntl.h>
 #include <time.h>
@@ -82,7 +81,6 @@ int get_socketID (int cpu) {
 
 void gather_machine_info() {
   FILE *lscpu; char buffer[256];
-  int num_cpus_from_lscpu = 0;
   int cpu_info[4] = {0};
   __asm__ volatile (
       "cpuid"
@@ -100,9 +98,7 @@ void gather_machine_info() {
   assert(lscpu != NULL && "Cannot execute lscpu");
   while (fgets(buffer, sizeof(buffer), lscpu)) {
     printf("1  ");
-    if (strncmp(buffer, "CPU(s):", 7) == 0) {
-      sscanf(buffer, "CPU(s): %d", &num_cpus_from_lscpu);
-    } else if (strncmp(buffer, "Core(s) per socket:", 19) == 0) {
+    if (strncmp(buffer, "Core(s) per socket:", 19) == 0) {
       sscanf(buffer, "Core(s) per socket: %d", &NUM_PHYSICAL_CORES_PER_SOCKET);
     } else if (strncmp(buffer, "Thread(s) per core:", 19) == 0) {
       sscanf(buffer, "Thread(s) per core: %d" ,&NUM_THREADS_PER_PHYSICAL_CORE);
@@ -115,15 +111,6 @@ void gather_machine_info() {
   assert(NUM_PHYSICAL_CORES_PER_SOCKET>0 && NUM_THREADS_PER_PHYSICAL_CORE>0 && NUM_SOCKETS>0 && "Incorrect machine information");
   NUM_CORES = NUM_PHYSICAL_CORES_PER_SOCKET*NUM_SOCKETS;
   NUM_LOGICAL_CORES = NUM_CORES*NUM_THREADS_PER_PHYSICAL_CORE;
-  if (num_cpus_from_lscpu > 0) {
-    NUM_LOGICAL_CORES = num_cpus_from_lscpu;
-  }
-  {
-    const long online = sysconf(_SC_NPROCESSORS_ONLN);
-    if (online > 0 && online < NUM_LOGICAL_CORES) {
-      NUM_LOGICAL_CORES = (int)online;
-    }
-  }
 
   // Determine first physical core at each socket
   socket_core = (int*) malloc(sizeof(int) * NUM_SOCKETS);
@@ -141,29 +128,12 @@ void register_perf_event(int core) {
   struct perf_event_attr attr;
   int ret;
   memset(&attr, 0, sizeof(attr));
-  attr.size = sizeof(attr);
   ret = pfm_get_perf_event_encoding(INSTR_EVENT, PFM_PLM0 | PFM_PLM3, &attr, NULL, NULL);
-  if (ret != PFM_SUCCESS) {
-    fprintf(stderr, "pfm_get_perf_event_encoding failed on core %d: %s\n", core, pfm_strerror(ret));
-    assert(0 && "Failed in pfm_get_perf_event_encoding");
-  }
+  if (ret != PFM_SUCCESS) assert(0 && "Failed in pfm_get_perf_event_encoding");
   attr.read_format = PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
   attr.disabled = 1;
-  errno = 0;
   instr_fd[core] = perf_event_open(&attr, -1, core, -1, 0); // Open event for all processes/threads at 'core'
-  if(instr_fd[core] < 0) {
-    fprintf(stderr,
-            "perf_event_open failed on core %d (type=%u, config=0x%llx): errno=%d (%s)\n",
-            core,
-            attr.type,
-            (unsigned long long)attr.config,
-            errno,
-            strerror(errno));
-    if (errno == EACCES || errno == EPERM) {
-      fprintf(stderr, "Hint: use sudo/CAP_PERFMON and set /proc/sys/kernel/perf_event_paranoid to <= 1.\n");
-    }
-    assert(0 && "Failed to create event");
-  }
+  if(instr_fd[core] < 0) assert(0 && "Failed to create event");
   // Activates the performance counter associated with file descriptor fd[i]
   ret = ioctl(instr_fd[core], PERF_EVENT_IOC_ENABLE, 0);
   if(ret) assert(0 && "Failed to enable counter using ioctl");
@@ -207,6 +177,7 @@ double calculate_JPI() {
 }
 
 void profiler_init() {
+  printf("2 ");
   gather_machine_info();
   uint64_t rapl_power_unit = 0;
   if(PROCESSOR == AMD) { 
@@ -244,27 +215,27 @@ void profiler_finalize() {
   free(energy_start);
 }
 
-// int fib(int n) {
-//   if(n<2) return n;
-//   int x, y;
-//   #pragma omp task untied shared(x)
-//   x = fib(n-1);
-//   #pragma omp task untied shared(y)
-//   y = fib(n-2);
-//   #pragma omp taskwait
-//   return x+y;
-// }
+int fib(int n) {
+  if(n<2) return n;
+  int x, y;
+  #pragma omp task untied shared(x)
+  x = fib(n-1);
+  #pragma omp task untied shared(y)
+  y = fib(n-2);
+  #pragma omp taskwait
+  return x+y;
+}
 
-// int main () {
-//   profiler_init();      // SHOULD BE CALLED IMMEDIATELY WHEN ENTERING MAIN
-//   for(int i=0; i <10; i++) {
-//     printf("Calling fib(25) %dth time\n",i);
-//     #pragma omp parallel
-//     #pragma omp single
-//     fib(25);
-//     printf("JPI = %.12f\n", calculate_JPI());
-//   }
-//   profiler_finalize();  // SHOULD BE CALLED IMMEDIATELY BEFORE EXITING MAIN
-//   return 0;
-// }
+int main () {
+  profiler_init();      // SHOULD BE CALLED IMMEDIATELY WHEN ENTERING MAIN
+  for(int i=0; i <10; i++) {
+    printf("Calling fib(25) %dth time\n",i);
+    #pragma omp parallel
+    #pragma omp single
+    fib(25);
+    printf("JPI = %.12f\n", calculate_JPI());
+  }
+  profiler_finalize();  // SHOULD BE CALLED IMMEDIATELY BEFORE EXITING MAIN
+  return 0;
+}
 
