@@ -1,5 +1,6 @@
 #include "quill.h"
 #include <stdint.h>
+#include <cstdlib>
 
 #define STREAM_ARRAY_SIZE 100000000
 #define NTIMES 10 //Control execution time on your local machine changing this value

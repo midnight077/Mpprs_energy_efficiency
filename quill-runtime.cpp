@@ -1,9 +1,14 @@
 #include "quill-runtime.h"
 #include <cstdlib>
 #include <cstdio>
+#include <ctime>
+#include <cerrno>
+#include <cstring>
 #include <unistd.h>
 #include <sched.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 extern "C" {
     void profiler_init();
@@ -14,6 +19,82 @@ extern "C" {
 namespace quill {
 
 RuntimeState* runtime = nullptr;
+
+static FILE* jpi_csv = nullptr;
+static FILE* dop_csv = nullptr;
+
+static bool ensure_directory_exists(const char* path) {
+    struct stat st;
+    if (stat(path, &st) == 0) {
+        return S_ISDIR(st.st_mode);
+    }
+    if (mkdir(path, 0755) == 0) {
+        return true;
+    }
+    return errno == EEXIST;
+}
+
+static void open_metric_csv_files() {
+    if (!ensure_directory_exists("JPI")) {
+        fprintf(stderr, "ERROR: Failed to create JPI directory.\n");
+        return;
+    }
+    if (!ensure_directory_exists("DOP")) {
+        fprintf(stderr, "ERROR: Failed to create DOP directory.\n");
+        return;
+    }
+
+    char jpi_path[256];
+    char dop_path[256];
+    time_t now = time(nullptr);
+    pid_t pid = getpid();
+
+    snprintf(jpi_path, sizeof(jpi_path), "JPI/jpi_%ld_%d.csv", static_cast<long>(now), static_cast<int>(pid));
+    snprintf(dop_path, sizeof(dop_path), "DOP/dop_%ld_%d.csv", static_cast<long>(now), static_cast<int>(pid));
+
+    jpi_csv = fopen(jpi_path, "w");
+    dop_csv = fopen(dop_path, "w");
+
+    if (!jpi_csv || !dop_csv) {
+        fprintf(stderr, "ERROR: Failed to open CSV files for logging.\n");
+        if (jpi_csv) {
+            fclose(jpi_csv);
+            jpi_csv = nullptr;
+        }
+        if (dop_csv) {
+            fclose(dop_csv);
+            dop_csv = nullptr;
+        }
+        return;
+    }
+
+    fprintf(jpi_csv, "JPI_prev,JPI_curr,time\n");
+    fprintf(dop_csv, "DOP_prev,DOP_curr,time\n");
+    fflush(jpi_csv);
+    fflush(dop_csv);
+}
+
+static void close_metric_csv_files() {
+    if (jpi_csv) {
+        fclose(jpi_csv);
+        jpi_csv = nullptr;
+    }
+    if (dop_csv) {
+        fclose(dop_csv);
+        dop_csv = nullptr;
+    }
+}
+
+static void log_metric_samples(double jpi_prev, double jpi_curr, int dop_prev, int dop_curr, long long time_ms) {
+    if (jpi_csv) {
+        fprintf(jpi_csv, "%.10e,%.10e,%lld\n", jpi_prev, jpi_curr, time_ms);
+        fflush(jpi_csv);
+    }
+    if (dop_csv) {
+        fprintf(dop_csv, "%d,%d,%lld\n", dop_prev, dop_curr, time_ms);
+        fflush(dop_csv);
+    }
+}
 
 // ─────────────────────────────────────────────
 // DEQUE
@@ -96,7 +177,7 @@ Task* find_work(int id) {
 // ─────────────────────────────────────────────
 
 void configure_DOP(double JPI_prev, double JPI_curr) {
-    const int N = 2; // tune on server: try 1, 2, 4
+    const int N = 4; // tune on server: try 1, 2, 4
 
     if (JPI_prev == 0.0) {
         // First call: unconditionally put N workers to sleep
@@ -149,16 +230,24 @@ void configure_DOP(double JPI_prev, double JPI_curr) {
 // ─────────────────────────────────────────────
 
 void* daemon_routine(void* arg) {
-    const int interval_ms = 50; // tune on server: try 20, 50, 100
+    const int interval_ms = 200; // tune on server: try 20, 50, 100
+    long long sample_idx = 0;
 
-    usleep(100000); // 100ms warmup before first measurement
+    usleep(50000); // 100ms warmup before first measurement
 
     double JPI_prev = 0.0; // sentinel for "first call"
 
     while (!runtime->shutdown) {
         double JPI_curr = calculate_JPI();
+        int dop_prev = runtime->current_active_workers;
         configure_DOP(JPI_prev, JPI_curr);
+        int dop_curr = runtime->current_active_workers;
+
+        long long time_ms = sample_idx * interval_ms;
+        log_metric_samples(JPI_prev, JPI_curr, dop_prev, dop_curr, time_ms);
+
         JPI_prev = JPI_curr;
+        sample_idx++;
         usleep(interval_ms * 1000);
     }
     return nullptr;
@@ -201,6 +290,7 @@ void init_runtime() {
     profiler_init();
 
     runtime = new RuntimeState();
+    open_metric_csv_files();
 
     const char* env = getenv("QUILL_WORKERS");
     runtime->num_workers = env ? atoi(env) : 4;
@@ -248,6 +338,7 @@ void finalize_runtime() {
     }
 
     profiler_finalize();
+    close_metric_csv_files();
 
     delete[] runtime->threads;
     delete[] runtime->deques;
