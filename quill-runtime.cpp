@@ -293,8 +293,7 @@ void init_runtime() {
     profiler_init();
 
     runtime = new RuntimeState();
-    open_metric_csv_files();
-
+    
     const char* env = getenv("QUILL_WORKERS");
     runtime->num_workers = env ? atoi(env) : 4;
     runtime->current_active_workers = runtime->num_workers;
@@ -309,7 +308,7 @@ void init_runtime() {
     runtime->worker_cond  = new pthread_cond_t[runtime->num_workers];
     runtime->worker_mutex = new pthread_mutex_t[runtime->num_workers];
     runtime->is_sleeping  = new bool[runtime->num_workers];
-
+    
     for (int i = 0; i < runtime->num_workers; i++) {
         pthread_cond_init(&runtime->worker_cond[i], nullptr);
         pthread_mutex_init(&runtime->worker_mutex[i], nullptr);
@@ -317,8 +316,9 @@ void init_runtime() {
         int* id = new int(i);
         pthread_create(&runtime->threads[i], nullptr, worker_routine, id);
     }
-
+    
     pthread_create(&runtime->daemon_thread, nullptr, daemon_routine, nullptr);
+    open_metric_csv_files();
 }
 
 void finalize_runtime() {
