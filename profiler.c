@@ -215,27 +215,27 @@ void profiler_finalize() {
   free(energy_start);
 }
 
-int fib(int n) {
-  if(n<2) return n;
-  int x, y;
-  #pragma omp task untied shared(x)
-  x = fib(n-1);
-  #pragma omp task untied shared(y)
-  y = fib(n-2);
-  #pragma omp taskwait
-  return x+y;
-}
+// int fib(int n) {
+//   if(n<2) return n;
+//   int x, y;
+//   #pragma omp task untied shared(x)
+//   x = fib(n-1);
+//   #pragma omp task untied shared(y)
+//   y = fib(n-2);
+//   #pragma omp taskwait
+//   return x+y;
+// }
 
-int main () {
-  profiler_init();      // SHOULD BE CALLED IMMEDIATELY WHEN ENTERING MAIN
-  for(int i=0; i <10; i++) {
-    printf("Calling fib(25) %dth time\n",i);
-    #pragma omp parallel
-    #pragma omp single
-    fib(25);
-    printf("JPI = %.12f\n", calculate_JPI());
-  }
-  profiler_finalize();  // SHOULD BE CALLED IMMEDIATELY BEFORE EXITING MAIN
-  return 0;
-}
+// int main () {
+//   profiler_init();      // SHOULD BE CALLED IMMEDIATELY WHEN ENTERING MAIN
+//   for(int i=0; i <10; i++) {
+//     printf("Calling fib(25) %dth time\n",i);
+//     #pragma omp parallel
+//     #pragma omp single
+//     fib(25);
+//     printf("JPI = %.12f\n", calculate_JPI());
+//   }
+//   profiler_finalize();  // SHOULD BE CALLED IMMEDIATELY BEFORE EXITING MAIN
+//   return 0;
+// }
 
