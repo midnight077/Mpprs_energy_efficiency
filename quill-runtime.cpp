@@ -23,7 +23,7 @@ RuntimeState* runtime = nullptr;
 static FILE* jpi_csv = nullptr;
 static FILE* dop_csv = nullptr;
 
-const int interval_ms = 0;
+int interval_ms = 0;
 int N = 0;
 
 static bool ensure_directory_exists(const char* path) {
