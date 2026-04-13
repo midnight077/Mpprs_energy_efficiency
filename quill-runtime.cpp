@@ -14,6 +14,7 @@ extern "C" {
     void profiler_init();
     void profiler_finalize();
     double calculate_JPI();
+    int NUM_LOGICAL_CORES;
 }
 
 namespace quill {
@@ -292,8 +293,10 @@ void init_runtime() {
     runtime = new RuntimeState();
     // open_metric_csv_files();
 
-    const char* env = getenv("QUILL_WORKERS");
-    runtime->num_workers = env ? atoi(env) : 4;
+    // const char* env = getenv("QUILL_WORKERS");
+    // runtime->num_workers = env ? atoi(env) : 4;
+    runtime->num_workers = NUM_LOGICAL_CORES;
+
     runtime->current_active_workers = runtime->num_workers;
     runtime->shutdown = false;
     runtime->finish_counter = 0;
