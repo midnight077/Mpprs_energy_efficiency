@@ -37,12 +37,12 @@ struct RuntimeState {
     pthread_mutex_t global_lock;
     pthread_key_t worker_id_key;
 
-    // --- NEW FOR DEADLINE 3 ---
+    // For Daemon Thread
     pthread_t daemon_thread;
-    pthread_cond_t* worker_cond;    // One per worker [cite: 55]
-    pthread_mutex_t* worker_mutex;  // One per worker [cite: 55]
-    bool* is_sleeping;              // Sleep status per worker [cite: 56]
-    int current_active_workers;     // Current DOP [cite: 47]
+    pthread_cond_t* worker_cond;    // One per worker
+    pthread_mutex_t* worker_mutex;  // One per worker 
+    bool* is_sleeping;              // Sleep status per worker 
+    int current_active_workers;     // Current DOP 
 };
 
 extern RuntimeState* runtime;

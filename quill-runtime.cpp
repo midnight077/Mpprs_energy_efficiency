@@ -14,26 +14,25 @@ extern "C" {
     void profiler_init();
     void profiler_finalize();
     double calculate_JPI();
-    int NUM_LOGICAL_CORES;
 }
 
 namespace quill {
 
 RuntimeState* runtime = nullptr;
 
-static FILE* jpi_csv = nullptr;
-static FILE* dop_csv = nullptr;
+// static FILE* jpi_csv = nullptr;
+// static FILE* dop_csv = nullptr;
 
-static bool ensure_directory_exists(const char* path) {
-    struct stat st;
-    if (stat(path, &st) == 0) {
-        return S_ISDIR(st.st_mode);
-    }
-    if (mkdir(path, 0755) == 0) {
-        return true;
-    }
-    return errno == EEXIST;
-}
+// static bool ensure_directory_exists(const char* path) {
+//     struct stat st;
+//     if (stat(path, &st) == 0) {
+//         return S_ISDIR(st.st_mode);
+//     }
+//     if (mkdir(path, 0755) == 0) {
+//         return true;
+//     }
+//     return errno == EEXIST;
+// }
 
 // static void open_metric_csv_files() {
 //     if (!ensure_directory_exists("JPI")) {
@@ -293,9 +292,8 @@ void init_runtime() {
     runtime = new RuntimeState();
     // open_metric_csv_files();
 
-    // const char* env = getenv("QUILL_WORKERS");
-    // runtime->num_workers = env ? atoi(env) : 4;
-    runtime->num_workers = NUM_LOGICAL_CORES;
+    const char* env = getenv("QUILL_WORKERS");
+    runtime->num_workers = env ? atoi(env) : 4;
 
     runtime->current_active_workers = runtime->num_workers;
     runtime->shutdown = false;
@@ -377,7 +375,7 @@ void end_finish() {
             delete t;
             decrement_finish_counter();
         } else {
-            sched_yield();
+            // sched_yield();
         }
     }
 }
