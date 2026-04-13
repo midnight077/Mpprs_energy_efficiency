@@ -23,9 +23,6 @@ RuntimeState* runtime = nullptr;
 static FILE* jpi_csv = nullptr;
 static FILE* dop_csv = nullptr;
 
-int interval_ms = 0;
-int N = 0;
-
 static bool ensure_directory_exists(const char* path) {
     struct stat st;
     if (stat(path, &st) == 0) {
@@ -37,67 +34,67 @@ static bool ensure_directory_exists(const char* path) {
     return errno == EEXIST;
 }
 
-static void open_metric_csv_files() {
-    if (!ensure_directory_exists("JPI")) {
-        fprintf(stderr, "ERROR: Failed to create JPI directory.\n");
-        return;
-    }
-    if (!ensure_directory_exists("DOP")) {
-        fprintf(stderr, "ERROR: Failed to create DOP directory.\n");
-        return;
-    }
+// static void open_metric_csv_files() {
+//     if (!ensure_directory_exists("JPI")) {
+//         fprintf(stderr, "ERROR: Failed to create JPI directory.\n");
+//         return;
+//     }
+//     if (!ensure_directory_exists("DOP")) {
+//         fprintf(stderr, "ERROR: Failed to create DOP directory.\n");
+//         return;
+//     }
 
-    char jpi_path[256];
-    char dop_path[256];
-    time_t now = time(nullptr);
-    pid_t pid = getpid();
+//     char jpi_path[256];
+//     char dop_path[256];
+//     time_t now = time(nullptr);
+//     pid_t pid = getpid();
 
-    snprintf(jpi_path, sizeof(jpi_path), "JPI/jpi_%d_%d.csv", interval_ms, N);
-    snprintf(dop_path, sizeof(dop_path), "DOP/dop_%d_%d.csv", interval_ms, N);
+//     snprintf(jpi_path, sizeof(jpi_path), "JPI/jpi_%ld_%d.csv", static_cast<long>(now), static_cast<int>(pid));
+//     snprintf(dop_path, sizeof(dop_path), "DOP/dop_%ld_%d.csv", static_cast<long>(now), static_cast<int>(pid));
 
-    jpi_csv = fopen(jpi_path, "w");
-    dop_csv = fopen(dop_path, "w");
+//     jpi_csv = fopen(jpi_path, "w");
+//     dop_csv = fopen(dop_path, "w");
 
-    if (!jpi_csv || !dop_csv) {
-        fprintf(stderr, "ERROR: Failed to open CSV files for logging.\n");
-        if (jpi_csv) {
-            fclose(jpi_csv);
-            jpi_csv = nullptr;
-        }
-        if (dop_csv) {
-            fclose(dop_csv);
-            dop_csv = nullptr;
-        }
-        return;
-    }
+//     if (!jpi_csv || !dop_csv) {
+//         fprintf(stderr, "ERROR: Failed to open CSV files for logging.\n");
+//         if (jpi_csv) {
+//             fclose(jpi_csv);
+//             jpi_csv = nullptr;
+//         }
+//         if (dop_csv) {
+//             fclose(dop_csv);
+//             dop_csv = nullptr;
+//         }
+//         return;
+//     }
 
-    fprintf(jpi_csv, "JPI_prev,JPI_curr,time\n");
-    fprintf(dop_csv, "DOP_prev,DOP_curr,time\n");
-    fflush(jpi_csv);
-    fflush(dop_csv);
-}
+//     fprintf(jpi_csv, "JPI_prev,JPI_curr,time\n");
+//     fprintf(dop_csv, "DOP_prev,DOP_curr,time\n");
+//     fflush(jpi_csv);
+//     fflush(dop_csv);
+// }
 
-static void close_metric_csv_files() {
-    if (jpi_csv) {
-        fclose(jpi_csv);
-        jpi_csv = nullptr;
-    }
-    if (dop_csv) {
-        fclose(dop_csv);
-        dop_csv = nullptr;
-    }
-}
+// static void close_metric_csv_files() {
+//     if (jpi_csv) {
+//         fclose(jpi_csv);
+//         jpi_csv = nullptr;
+//     }
+//     if (dop_csv) {
+//         fclose(dop_csv);
+//         dop_csv = nullptr;
+//     }
+// }
 
-static void log_metric_samples(double jpi_prev, double jpi_curr, int dop_prev, int dop_curr, long long time_ms) {
-    if (jpi_csv) {
-        fprintf(jpi_csv, "%.10e,%.10e,%lld\n", jpi_prev, jpi_curr, time_ms);
-        fflush(jpi_csv);
-    }
-    if (dop_csv) {
-        fprintf(dop_csv, "%d,%d,%lld\n", dop_prev, dop_curr, time_ms);
-        fflush(dop_csv);
-    }
-}
+// static void log_metric_samples(double jpi_prev, double jpi_curr, int dop_prev, int dop_curr, long long time_ms) {
+//     if (jpi_csv) {
+//         fprintf(jpi_csv, "%.10e,%.10e,%lld\n", jpi_prev, jpi_curr, time_ms);
+//         fflush(jpi_csv);
+//     }
+//     if (dop_csv) {
+//         fprintf(dop_csv, "%d,%d,%lld\n", dop_prev, dop_curr, time_ms);
+//         fflush(dop_csv);
+//     }
+// }
 
 // ─────────────────────────────────────────────
 // DEQUE
@@ -180,7 +177,7 @@ Task* find_work(int id) {
 // ─────────────────────────────────────────────
 
 void configure_DOP(double JPI_prev, double JPI_curr) {
-    N = 4; // tune on server: try 1, 2, 4
+    const int N = 4; // tune on server: try 1, 2, 4
 
     if (JPI_prev == 0.0) {
         // First call: unconditionally put N workers to sleep
@@ -233,7 +230,7 @@ void configure_DOP(double JPI_prev, double JPI_curr) {
 // ─────────────────────────────────────────────
 
 void* daemon_routine(void* arg) {
-    interval_ms = 200; // tune on server: try 20, 50, 100
+    const int interval_ms = 200; // tune on server: try 20, 50, 100
     long long sample_idx = 0;
 
     usleep(50000); // 100ms warmup before first measurement
@@ -247,7 +244,7 @@ void* daemon_routine(void* arg) {
         int dop_curr = runtime->current_active_workers;
 
         long long time_ms = sample_idx * interval_ms;
-        log_metric_samples(JPI_prev, JPI_curr, dop_prev, dop_curr, time_ms);
+        // log_metric_samples(JPI_prev, JPI_curr, dop_prev, dop_curr, time_ms);
 
         JPI_prev = JPI_curr;
         sample_idx++;
@@ -293,7 +290,8 @@ void init_runtime() {
     profiler_init();
 
     runtime = new RuntimeState();
-    
+    // open_metric_csv_files();
+
     const char* env = getenv("QUILL_WORKERS");
     runtime->num_workers = env ? atoi(env) : 4;
     runtime->current_active_workers = runtime->num_workers;
@@ -308,7 +306,7 @@ void init_runtime() {
     runtime->worker_cond  = new pthread_cond_t[runtime->num_workers];
     runtime->worker_mutex = new pthread_mutex_t[runtime->num_workers];
     runtime->is_sleeping  = new bool[runtime->num_workers];
-    
+
     for (int i = 0; i < runtime->num_workers; i++) {
         pthread_cond_init(&runtime->worker_cond[i], nullptr);
         pthread_mutex_init(&runtime->worker_mutex[i], nullptr);
@@ -316,9 +314,8 @@ void init_runtime() {
         int* id = new int(i);
         pthread_create(&runtime->threads[i], nullptr, worker_routine, id);
     }
-    
+
     pthread_create(&runtime->daemon_thread, nullptr, daemon_routine, nullptr);
-    open_metric_csv_files();
 }
 
 void finalize_runtime() {
@@ -341,7 +338,7 @@ void finalize_runtime() {
     }
 
     profiler_finalize();
-    close_metric_csv_files();
+    // close_metric_csv_files();
 
     delete[] runtime->threads;
     delete[] runtime->deques;
