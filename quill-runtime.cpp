@@ -23,6 +23,9 @@ RuntimeState* runtime = nullptr;
 static FILE* jpi_csv = nullptr;
 static FILE* dop_csv = nullptr;
 
+const int interval_ms = 0;
+int N = 0;
+
 static bool ensure_directory_exists(const char* path) {
     struct stat st;
     if (stat(path, &st) == 0) {
@@ -49,8 +52,8 @@ static void open_metric_csv_files() {
     time_t now = time(nullptr);
     pid_t pid = getpid();
 
-    snprintf(jpi_path, sizeof(jpi_path), "JPI/jpi_%ld_%d.csv", static_cast<long>(now), static_cast<int>(pid));
-    snprintf(dop_path, sizeof(dop_path), "DOP/dop_%ld_%d.csv", static_cast<long>(now), static_cast<int>(pid));
+    snprintf(jpi_path, sizeof(jpi_path), "JPI/jpi_%d_%d.csv", interval_ms, N);
+    snprintf(dop_path, sizeof(dop_path), "DOP/dop_%d_%d.csv", interval_ms, N);
 
     jpi_csv = fopen(jpi_path, "w");
     dop_csv = fopen(dop_path, "w");
@@ -177,7 +180,7 @@ Task* find_work(int id) {
 // ─────────────────────────────────────────────
 
 void configure_DOP(double JPI_prev, double JPI_curr) {
-    const int N = 4; // tune on server: try 1, 2, 4
+    N = 4; // tune on server: try 1, 2, 4
 
     if (JPI_prev == 0.0) {
         // First call: unconditionally put N workers to sleep
@@ -230,7 +233,7 @@ void configure_DOP(double JPI_prev, double JPI_curr) {
 // ─────────────────────────────────────────────
 
 void* daemon_routine(void* arg) {
-    const int interval_ms = 200; // tune on server: try 20, 50, 100
+    interval_ms = 200; // tune on server: try 20, 50, 100
     long long sample_idx = 0;
 
     usleep(50000); // 100ms warmup before first measurement
