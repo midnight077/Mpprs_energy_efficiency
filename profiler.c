@@ -56,7 +56,7 @@ void get_timer(double *timer){
 // Function to read an MSR register
 uint64_t read_msr(int cpu, uint32_t msr) {
     char msr_path[32];
-    snprintf(msr_path, sizeof(msr_path), "/dev/cpu/%d/msr", cpu);
+    snprintf(msr_path, sizeof(msr_path), "/dev/cpu/%d/msr_safe", cpu);
     int fd = open(msr_path, O_RDONLY);
     assert(fd >= 0 && "Failed to open MSR file (Try running as sudo)");
     uint64_t value;
