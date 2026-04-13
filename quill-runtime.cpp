@@ -193,7 +193,7 @@ void configure_DOP(double JPI_prev, double JPI_curr) {
         return;
     }
 
-    if (JPI_curr < JPI_prev) {
+    if (JPI_curr > JPI_prev) {
         // JPI improved -> put N more workers to sleep
         int target = runtime->current_active_workers - N;
         if (target < 1) target = 1;
@@ -207,7 +207,7 @@ void configure_DOP(double JPI_prev, double JPI_curr) {
                    JPI_prev, JPI_curr, runtime->current_active_workers, target);
             runtime->current_active_workers = target;
         }
-    } else if (JPI_curr > JPI_prev) {
+    } else if (JPI_curr < JPI_prev) {
         // JPI worsened -> wake N workers back up
         int target = runtime->current_active_workers + N;
         if (target > runtime->num_workers) target = runtime->num_workers;
